@@ -1,65 +1,55 @@
 # %%
 import pandas as pd
-from sklearn.model_selection import train_test_split, cross_val_score, StratifiedKFold
-from sklearn.tree import DecisionTreeClassifier
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.metrics import classification_report, accuracy_score
+import re
 
-# Load your dataset
+# Load the dataset
 data_path = r"C:\Users\khadi\OneDrive\Desktop\AI Assignment Dataset\customer_support_tickets.csv"
 df = pd.read_csv(data_path)
 
 # Check the first few rows of the dataset
-print(df.head())
+print("Dataset Preview:\n", df.head())
 
-# Check the column names in the dataset
-print("Column names in dataset:")
-print(df.columns)
+# Define a keyword dictionary with priority
+# Higher numbers indicate higher priority for category matching
+keywords = {
+    "complaint": (["issue", "problem", "not working", "faulty", "complaint"], 2),
+    "billing": (["invoice", "billing", "charge", "overcharge", "refund"], 1),
+    "technical_support": (["error", "bug", "technical", "support"], 2),
+    "general_inquiry": (["info", "information", "details", "query"], 0)
+}
 
-# Ensure that 'Ticket Description' (or your chosen text column) and target category column are specified correctly
-text_column = 'Ticket Description'  # Replace with the correct text column
-target_column = 'Predicted_Category'  # Replace with your actual target column name
+# Initialize an empty column for predicted category
+df["Predicted_Category"] = "other"
 
-# Ensure the target column is available
-if target_column not in df.columns:
-    print(f"Target column '{target_column}' not found in the dataset.")
-else:
-    # Features and target variable
-    X = df[text_column]  # Extract text data
-    y = df[target_column]  # Extract target variable
+# Keyword-based filtering function with prioritization
+def categorize_ticket(description):
+    if pd.isna(description):
+        return "other"  # Return "other" if description is NaN
+    
+    description = description.lower().strip()  # Lowercase and strip whitespace for uniformity
+    matched_category = "other"
+    highest_priority = -1  # Initialize with low priority
 
-    # Vectorizing text data
-    vectorizer = CountVectorizer()
-    X_vectorized = vectorizer.fit_transform(X)
+    # Check each category and its associated keywords and priority
+    for category, (words, priority) in keywords.items():
+        # If priority is higher than the highest found, look for keyword matches
+        if priority > highest_priority:
+            for word in words:
+                # Search for keyword using regex for partial matches, word boundaries
+                if re.search(r"\b" + re.escape(word) + r"\b", description):
+                    matched_category = category
+                    highest_priority = priority  # Update priority
+                    break  # Stop if a match is found within this priority level
+    return matched_category
 
-    # Create and train the Decision Tree classifier
-    clf = DecisionTreeClassifier(random_state=42)
+# Apply categorization function to each ticket description
+df["Predicted_Category"] = df["Ticket Description"].apply(categorize_ticket)
 
-    # Cross-validation to evaluate model performance
-    cv = StratifiedKFold(n_splits=5)  # Using StratifiedKFold for class balance
-    scores = cross_val_score(clf, X_vectorized, y, cv=cv)  # 5-fold cross-validation
-    print("Cross-validated accuracy scores:", scores)
-    print("Mean accuracy:", scores.mean())
+# Display a sample of categorized data
+print("\nSample Categorized Data:\n", df[["Ticket ID", "Ticket Description", "Predicted_Category"]].head())
 
-    # Splitting data into training and testing sets for further evaluation
-    X_train, X_test, y_train, y_test = train_test_split(X_vectorized, y, test_size=0.2, random_state=42)
-    clf.fit(X_train, y_train)
-
-    # Making predictions
-    y_pred = clf.predict(X_test)
-
-    # Evaluating the model
-    print("Accuracy:", accuracy_score(y_test, y_pred))
-    print("Classification Report:\n", classification_report(y_test, y_pred))
-
-    # Example of predicting a new ticket
-    new_ticket = ['I want to know about my last invoice']  # Replace with an actual example
-    new_ticket_vectorized = vectorizer.transform(new_ticket)
-    predicted_category = clf.predict(new_ticket_vectorized)
-
-    print("Predicted category for new ticket:", predicted_category[0])
-
-
-
-
+# Save the categorized data to a new CSV file
+output_path = r"C:\Users\khadi\OneDrive\Desktop\AI Assignment Dataset\customer_support_tickets_categorized.csv"
+df.to_csv(output_path, index=False)
+print(f"Categorized data saved to {output_path}")
 # %%
