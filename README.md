@@ -3,6 +3,7 @@ Customer Support Classification using Rule-Based AI:
 This project implements two rule-based AI algorithms for classifying customer support tickets. The goal is to compare their performance and assess their suitability for solving the problem of automatic customer support categorization. This README provides setup instructions, usage guidelines, and an overview of the project structure.
 
 Project Structure
+
 Keyword Filtering.py: The main Python script that processes the CSV data, applies keyword-based filtering, and categorizes each ticket based on its content.
 customer_support_tickets.csv: The input dataset containing customer support tickets. This dataset includes columns like Ticket Description, Customer Name, Customer Age, and more.
 customer_support_tickets_categorized.csv: The output dataset with an additional Predicted_Category column containing the predicted category for each ticket.
