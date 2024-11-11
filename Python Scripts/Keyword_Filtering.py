@@ -5,16 +5,19 @@ from sklearn.metrics import precision_score, recall_score, f1_score, accuracy_sc
 # Load the dataset
 data_path = r"C:\Users\khadi\OneDrive\Desktop\AI Assignment Dataset\customer_support_tickets.csv"
 df = pd.read_csv(data_path)
+
+# Rename columns if needed
 df.rename(columns={'Ticket Type': 'Actual_Category'}, inplace=True)
-print(df['Actual_Category'].unique())
 
+# Check if the necessary columns exist
+if 'Ticket Description' not in df.columns or 'Actual_Category' not in df.columns:
+    raise ValueError("The dataset must contain 'Ticket Description' and 'Actual_Category' columns.")
 
-
-# Check the first few rows of the dataset
+# Preview the dataset and show unique categories
+print(f"Unique Actual Categories: {df['Actual_Category'].unique()}")
 print("Dataset Preview:\n", df.head())
 
 # Define a keyword dictionary with priority
-# Higher numbers indicate higher priority for category matching
 keywords = {
     "technical issue": (["issue", "problem", "technical", "error", "support"], 2),
     "billing inquiry": (["billing", "invoice", "charge", "refund", "overcharge"], 1),
@@ -23,14 +26,13 @@ keywords = {
     "refund request": (["refund", "money back", "chargeback", "reimbursement"], 1)
 }
 
-
 # Initialize an empty column for predicted category
 df["Predicted_Category"] = "other"
 df['Predicted_Category'] = df['Predicted_Category'].str.strip().str.lower()
 df['Actual_Category'] = df['Actual_Category'].str.strip().str.lower()
+
+# Preview of 'Ticket ID', 'Actual_Category', and 'Predicted_Category' columns
 print(df[['Ticket ID', 'Actual_Category', 'Predicted_Category']].head(10))
-
-
 
 # Keyword-based filtering function with prioritization
 def categorize_ticket(description):
@@ -67,11 +69,11 @@ if 'Actual_Category' in df.columns:
     f1 = f1_score(df['Actual_Category'], df['Predicted_Category'], average='weighted', zero_division=0)
     accuracy = accuracy_score(df['Actual_Category'], df['Predicted_Category'])
 
-    # Print results
-    print(f"\nPrecision: {precision:.2f}")
-    print(f"Recall: {recall:.2f}")
-    print(f"F1 Score: {f1:.2f}")
-    print(f"Accuracy: {accuracy:.2f}")
+    # Print results as percentages
+    print(f"\nPrecision: {precision * 100:.2f}%")
+    print(f"Recall: {recall * 100:.2f}%")
+    print(f"F1 Score: {f1 * 100:.2f}%")
+    print(f"Accuracy: {accuracy * 100:.2f}%")
 else:
     print("The dataset does not contain an 'Actual_Category' column for evaluation.")
 
