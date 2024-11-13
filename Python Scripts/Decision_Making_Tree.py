@@ -22,7 +22,7 @@ print(df.columns)
 
 # Define primary and alternative target column names
 primary_target_column = 'Predicted_Category'
-alternative_target_column = 'Ticket Type'  # Replace this with any possible column that might contain category information
+alternative_target_column = 'Ticket Type' 
 
 # Check if either target column is present in the dataset
 if primary_target_column in df.columns:
