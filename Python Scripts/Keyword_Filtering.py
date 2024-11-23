@@ -1,138 +1,103 @@
-import pandas as pd  # Import the pandas library for data manipulation
-import re  # Import the regular expression library for text preprocessing
-from sklearn.feature_extraction.text import TfidfVectorizer  # Import TF-IDF vectorizer for text feature extraction
-from sklearn.model_selection import train_test_split, RandomizedSearchCV  # Import functions for splitting data and hyperparameter tuning
-from sklearn.svm import SVC  # Import Support Vector Classifier for the machine learning model
-from sklearn.metrics import classification_report, confusion_matrix, roc_curve, auc  # Import metrics for evaluation
-import seaborn as sns  # Import seaborn for creating statistical plots
-import matplotlib.pyplot as plt  # Import matplotlib for plotting
-import numpy as np  # Import numpy for numerical operations
-from sklearn.preprocessing import label_binarize  # Import label_binarize for multi-class ROC curve
-from sklearn.metrics import roc_auc_score  # Import AUC for evaluating ROC curve
+# Import necessary libraries
+import pandas as pd  # For data manipulation and analysis
+import re  # For regular expressions (text processing)
+import matplotlib.pyplot as plt  # For plotting visualizations
+import seaborn as sns  # For creating aesthetically pleasing statistical graphics
+from sklearn.metrics import confusion_matrix  # To generate a confusion matrix
+import numpy as np  # For numerical computations
 
 # Load the dataset
-data_path = r"Dataset\customer_support_tickets.csv"  # Set the file path for the dataset
-df = pd.read_csv(data_path)  # Read the dataset into a pandas DataFrame
+data_path = r"Dataset\customer_support_tickets.csv"  # Path to the dataset (adjust if necessary)
+df = pd.read_csv(data_path)  # Read the dataset into a DataFrame
 
-# Select the target column and text column
-target_column = 'Ticket Type'  # The column that contains the target labels (ticket types)
-text_column = 'Ticket Description'  # The column that contains the text (ticket descriptions)
+# Display the dataset preview
+print("Dataset Preview:")  # Print a message
+print(df.head(), "\n")  # Display the first 5 rows of the dataset for a quick overview
 
-# Preprocess text function
+# Display column names
+print("Column names in dataset:\n", df.columns, "\n")  # Print all column names in the dataset
+
+# Define the target column and text column
+target_column = 'Ticket Type'  # Column containing the actual labels/categories
+text_column = 'Ticket Description'  # Column containing text descriptions to classify
+
+# Print label distribution
+print(f"Using target column '{target_column}'.\n")  # Print the selected target column
+label_distribution = df[target_column].value_counts()  # Count the frequency of each category
+print("Label distribution in 'Ticket Type':")  # Print a message
+print(label_distribution, "\n")  # Display the distribution of categories
+
+# Plot label distribution (Fix FutureWarning)
+plt.figure(figsize=(10, 6))  # Set the figure size
+sns.barplot(x=label_distribution.index, y=label_distribution.values, hue=label_distribution.index, palette="viridis", legend=False)  # Create a bar plot for category distribution
+plt.title("Label Distribution in Ticket Type", fontsize=16)  # Add a title to the plot
+plt.ylabel("Count", fontsize=12)  # Label the y-axis
+plt.xlabel("Ticket Type", fontsize=12)  # Label the x-axis
+plt.xticks(rotation=45, fontsize=10)  # Rotate x-axis labels for better readability
+plt.tight_layout()  # Adjust the layout to avoid overlapping
+plt.show()  # Display the plot
+
+# Preprocess text
 def preprocess_text(text):
+    if pd.isna(text):  # Check if the text is NaN (missing value)
+        return ""  # Return an empty string for missing values
     text = text.lower()  # Convert text to lowercase
-    text = re.sub(r'\d+', '', text)  # Remove all digits
-    text = re.sub(r'\b\w{1,2}\b', '', text)  # Remove short words (1-2 characters)
-    text = re.sub(r'[^\w\s]', '', text)  # Remove all punctuation
-    text = re.sub(r'\s+', ' ', text).strip()  # Remove extra spaces and strip leading/trailing spaces
-    return text  # Return the cleaned text
+    text = re.sub(r'[^\w\s]', '', text)  # Remove punctuation
+    return text.strip()  # Remove leading/trailing spaces
 
-df[text_column] = df[text_column].apply(preprocess_text)  # Apply text preprocessing to the entire text column
+# Apply text preprocessing to the specified column
+df[text_column] = df[text_column].apply(preprocess_text)
 
-# Split the dataset into training and testing sets
-X = df[text_column]  # Features (text descriptions)
-y = df[target_column]  # Target labels (ticket types)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)  # Split data into training (80%) and testing (20%) sets
+# Rule-based keyword filtering
+def classify_ticket(description):
+    # Define keyword mappings for each category
+    keyword_map = {
+        'Refund request': ['refund', 'return', 'money back', 'refund request'],
+        'Technical issue': ['technical', 'error', 'not working', 'crash', 'bug'],
+        'Cancellation request': ['cancel', 'termination', 'close account'],
+        'Product inquiry': ['price', 'spec', 'details', 'buy', 'purchase'],
+        'Billing inquiry': ['bill', 'invoice', 'charge', 'payment', 'account balance'],
+        'Shipping': ['ship', 'delivery', 'track', 'shipping', 'dispatch'],
+        'General Inquiry': ['question', 'help', 'general', 'information', 'assistance']
+    }
+    for category, keywords in keyword_map.items():  # Loop through each category and its keywords
+        if any(keyword in description for keyword in keywords):  # Check if any keyword matches the description
+            return category  # Return the matching category
+    return 'General Inquiry'  # Default category if no match is found
 
-# TF-IDF with parameter tuning
-tfidf_vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1, 2), max_features=2000)  # Initialize TF-IDF vectorizer with stop words, n-grams, and max features
+# Apply classification to each ticket description
+df['Predicted_Category'] = df[text_column].apply(classify_ticket)
 
-# Fit and transform the training data, and transform the test data
-X_train_tfidf = tfidf_vectorizer.fit_transform(X_train)  # Fit and transform the training data into TF-IDF features
-X_test_tfidf = tfidf_vectorizer.transform(X_test)  # Transform the test data into TF-IDF features
+# Display predicted categories for the first few rows
+print("Predicted categories:")  # Print a message
+print(df[['Predicted_Category']].head(), "\n")  # Show the predicted categories for the first 5 rows
 
-# SVM Model with hyperparameter tuning using RandomizedSearchCV
-svm_model = SVC(class_weight='balanced', random_state=42, probability=True)  # Initialize SVM model with balanced class weights and probability estimation
+# Confusion Matrix
+conf_matrix = confusion_matrix(df[target_column], df['Predicted_Category'], labels=df[target_column].unique())  # Compute the confusion matrix
 
-# Parameters for tuning (smaller grid for speed)
-parameters = {
-    'C': [0.1, 1, 10],  # Regularization parameter
-    'kernel': ['linear', 'rbf'],  # Kernel types for the SVM
-    'gamma': ['scale', 'auto']  # Kernel coefficient for 'rbf' kernel
-}
-
-# Perform RandomizedSearchCV to find the best hyperparameters with parallelization
-random_search = RandomizedSearchCV(svm_model, parameters, cv=3, n_iter=5, scoring='accuracy', n_jobs=-1, random_state=42)  # Perform randomized search with cross-validation
-random_search.fit(X_train_tfidf, y_train)  # Fit the randomized search to the training data
-
-# Best parameters from random search
-print("Best parameters found: ", random_search.best_params_)  # Print the best parameters found by RandomizedSearchCV
-
-# Train the best model
-best_svm_model = random_search.best_estimator_  # Select the best model from the random search
-
-# Predict on the test set
-y_pred = best_svm_model.predict(X_test_tfidf)  # Make predictions on the test data
-
-# Evaluate the model
-accuracy = (y_pred == y_test).mean()  # Calculate accuracy by comparing predictions to true labels
-print(f"\nTF-IDF with SVM Accuracy: {accuracy:.2f}\n")  # Print the accuracy
-
-# Classification report and confusion matrix
-print("Classification Report:")  # Print the classification report
-report = classification_report(y_test, y_pred, output_dict=True)  # Generate the classification report as a dictionary
-
-# Print the classification report in the desired format
-print(f"{'':<25} {'precision':<10} {'recall':<10} {'f1-score':<10} {'support':<10}")
-for class_name, metrics in report.items():  # Loop through each class's metrics in the report
-    if class_name not in ['accuracy', 'macro avg', 'weighted avg']:  # Skip overall accuracy metrics
-        print(f"{class_name:<25} {metrics['precision']:<10.2f} {metrics['recall']:<10.2f} {metrics['f1-score']:<10.2f} {metrics['support']:<10}")
-
-# Print overall metrics (accuracy, macro avg, weighted avg)
-print(f"\n{'accuracy':<25} {accuracy * 100:.2f}%")  # Print accuracy as a percentage
-print(f"{'macro avg':<25} {report['macro avg']['precision'] * 100:.2f}% {report['macro avg']['recall'] * 100:.2f}% {report['macro avg']['f1-score'] * 100:.2f}%")  # Print macro averages
-print(f"{'weighted avg':<25} {report['weighted avg']['precision'] * 100:.2f}% {report['weighted avg']['recall'] * 100:.2f}% {report['weighted avg']['f1-score'] * 100:.2f}%")  # Print weighted averages
-        
-# Calculate and print average metrics (precision, recall, F1-score, accuracy)
-precision_avg = sum([report[class_name]['precision'] for class_name in report.keys() if class_name not in ['accuracy', 'macro avg', 'weighted avg']]) / len(report)  # Calculate average precision
-recall_avg = sum([report[class_name]['recall'] for class_name in report.keys() if class_name not in ['accuracy', 'macro avg', 'weighted avg']]) / len(report)  # Calculate average recall
-f1_avg = sum([report[class_name]['f1-score'] for class_name in report.keys() if class_name not in ['accuracy', 'macro avg', 'weighted avg']]) / len(report)  # Calculate average F1-score
-
-# Print the averages (Precision, Recall, F1-Score, Accuracy)
-print(f"\nAverage Precision: {precision_avg * 100:.2f}%")  # Print average precision
-print(f"Average Recall: {recall_avg * 100:.2f}%")  # Print average recall
-print(f"Average F1-Score: {f1_avg * 100:.2f}%")  # Print average F1-score
-print(f"Average Accuracy: {accuracy * 100:.2f}%")  # Print average accuracy
-
-# Confusion matrix
-conf_matrix = confusion_matrix(y_test, y_pred)  # Generate the confusion matrix
-
-# Confusion matrix heatmap
-plt.figure(figsize=(8, 6))  # Set the figure size for the heatmap
-sns.heatmap(conf_matrix, annot=True, fmt="d", cmap='Blues', xticklabels=best_svm_model.classes_, yticklabels=best_svm_model.classes_)  # Plot the confusion matrix as a heatmap
-plt.title('Confusion Matrix Heatmap')  # Set the title for the heatmap
-plt.xlabel('Predicted Category')  # Label for the x-axis
-plt.ylabel('Actual Category')  # Label for the y-axis
-plt.tight_layout()  # Adjust layout for tightness
+# Plot Confusion Matrix Heatmap
+plt.figure(figsize=(10, 6))  # Set the figure size
+sns.heatmap(conf_matrix, annot=True, fmt='g', cmap="Blues", xticklabels=df[target_column].unique(), yticklabels=df[target_column].unique())  # Create a heatmap of the confusion matrix
+plt.title("Confusion Matrix Heatmap", fontsize=16)  # Add a title
+plt.ylabel("True Labels", fontsize=12)  # Label the y-axis
+plt.xlabel("Predicted Labels", fontsize=12)  # Label the x-axis
+plt.xticks(rotation=45, fontsize=10)  # Rotate x-axis labels for better readability
+plt.yticks(rotation=0, fontsize=10)  # Ensure y-axis labels are horizontal
+plt.tight_layout()  # Adjust the layout
 plt.show()  # Display the heatmap
 
-# ROC Curve
+# Visualize predicted categories (Pie Chart)
+predicted_distribution = df['Predicted_Category'].value_counts()  # Count the frequency of predicted categories
 
-# Binarize the output labels for multi-class ROC (one-vs-rest)
-y_test_bin = label_binarize(y_test, classes=best_svm_model.classes_)  # Binarize the test labels
-y_pred_prob = best_svm_model.predict_proba(X_test_tfidf)  # Get the predicted probabilities for each class
+# Pie chart for predicted categories
+plt.figure(figsize=(8, 8))  # Set the figure size
+plt.pie(predicted_distribution, labels=predicted_distribution.index, autopct='%1.1f%%', colors=sns.color_palette("pastel", len(predicted_distribution)))  # Create a pie chart
+plt.title("Distribution of Predicted Categories", fontsize=16)  # Add a title
+plt.tight_layout()  # Adjust the layout
+plt.show()  # Display the pie chart
 
-# Plot ROC curve for each class
-plt.figure(figsize=(12, 8))  # Set the figure size for the ROC curve plot
-for i, class_name in enumerate(best_svm_model.classes_):  # Loop through each class
-    fpr, tpr, _ = roc_curve(y_test_bin[:, i], y_pred_prob[:, i])  # Calculate false positive rate and true positive rate for ROC curve
-    roc_auc = auc(fpr, tpr)  # Calculate AUC (Area Under the Curve)
-    plt.plot(fpr, tpr, label=f'{class_name} (AUC = {roc_auc:.2f})')  # Plot the ROC curve for each class
-
-# Plot the diagonal line (Random guess)
-plt.plot([0, 1], [0, 1], 'k--')  # Plot a diagonal line indicating random guessing
-
-# Labeling the plot
-plt.title('Receiver Operating Characteristic (ROC) Curve')  # Title for the ROC curve plot
-plt.xlabel('False Positive Rate')  # Label for the x-axis
-plt.ylabel('True Positive Rate')  # Label for the y-axis
-plt.legend(loc='lower right')  # Display the legend in the lower-right corner
-plt.tight_layout()  # Adjust layout for tightness
-plt.show()  # Display the ROC curve
-
-# Predicting the category for a new ticket
-new_ticket = ['I want to know about my last invoice']  # Sample new ticket for prediction
-new_ticket_processed = preprocess_text(new_ticket[0])  # Preprocess the new ticket text
-new_ticket_tfidf = tfidf_vectorizer.transform([new_ticket_processed])  # Transform the new ticket using the TF-IDF vectorizer
-predicted_category = best_svm_model.predict(new_ticket_tfidf)  # Predict the category of the new ticket
-print("\nPredicted category for new ticket:", predicted_category[0])  # Print the predicted category
+# Simulate predicting a new ticket
+new_ticket = "I have an issue with my invoice and charges"  # Define a new ticket description
+new_ticket_processed = preprocess_text(new_ticket)  # Preprocess the new ticket description
+predicted_category = classify_ticket(new_ticket_processed)  # Predict the category of the new ticket
+print("Predicted category for new ticket:", predicted_category)  # Print the predicted category
